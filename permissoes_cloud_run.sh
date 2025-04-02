@@ -1,110 +1,95 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from reportlab.pdfgen import canvas
-import pandas as pd
-import gspread
-import os
-from fastapi.responses import JSONResponse
-import uvicorn
 
-app = FastAPI()
+Logs
 
-# ================= CONFIGURAÇÕES =====================
-SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
-]
-SERVICE_ACCOUNT_FILE = 'client_secret.json'
-SHEET_ID = '1YPZfz6MNSBoCP-AcUlFzqGf0KOdxLnJPA9oeJHz7zEc'
-DRIVE_FOLDER_ID = 'SEU_FOLDER_ID_AQUI'
+build
+container
 
-# ============= MODELO DE DADOS ======================
-class Registro(BaseModel):
-    tabela: str
-    id: str
-    nome: str
-    cpf: str
 
-# ============= FUNÇÃO DE VALIDAÇÃO DE CPF ============
-def validar_cpf(cpf):
-    cpf = ''.join(filter(str.isdigit, cpf))
-    if len(cpf) != 11 or cpf == cpf[0] * 11:
-        return False
-    for i in range(9, 11):
-        soma = sum(int(cpf[num]) * ((i + 1) - num) for num in range(0, i))
-        digito = ((soma * 10) % 11) % 10
-        if digito != int(cpf[i]):
-            return False
-    return True
 
-# ============ CONEXÃO GOOGLE SHEETS =================
-def conectar_sheet():
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    gc = gspread.authorize(creds)
-    return gc.open_by_key(SHEET_ID)
+===== Application Startup at 2025-04-02 05:51:46 =====
 
-# ============ GERAÇÃO DO PDF ========================
-def gerar_pdf(nome, cpf, output_path):
-    c = canvas.Canvas(output_path)
-    c.drawString(100, 800, "TERMO DE POSSE E INVESTIDURA")
-    c.drawString(100, 780, f"Nome: {nome}")
-    c.drawString(100, 760, f"CPF: {cpf}")
-    c.save()
-
-# =========== ATUALIZAR PLANILHA =====================
-def atualizar_link(sheet_name, row_id, link):
-    sh = conectar_sheet()
-    worksheet = sh.worksheet(sheet_name)
-    worksheet.update_cell(int(row_id) + 1, worksheet.find('Link_PDF').col, link)
-
-# =================== ENDPOINTS ======================
-@app.post("/gerar-pdf")
-async def gerar_pdf_registro(registro: Registro):
-    if not validar_cpf(registro.cpf):
-        raise HTTPException(status_code=400, detail="CPF inválido")
-
-    # Gera PDF
-    pdf_path = f"/tmp/termo_{registro.id}.pdf"
-    gerar_pdf(registro.nome, registro.cpf, pdf_path)
-
-    # Upload no Google Drive
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    drive_service = build('drive', 'v3', credentials=creds)
-    file_metadata = {
-        'name': f'termo_{registro.id}.pdf',
-        'parents': [DRIVE_FOLDER_ID]
-    }
-    from googleapiclient.http import MediaFileUpload
-    media = MediaFileUpload(pdf_path, mimetype='application/pdf')
-    file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    link = f"https://drive.google.com/file/d/{file.get('id')}/view"
-
-    # Atualiza planilha
-    atualizar_link(registro.tabela, registro.id, link)
-
-    return {"status": "PDF Gerado", "link": link}
-
-@app.get("/")
-async def health():
-    return JSONResponse({"status": "API rodando"})
-
-@app.get("/registro/{row_id}")
-async def consultar_registro(row_id: int):
-    sh = conectar_sheet()
-    ws = sh.worksheet("Página 2")
-    registros = ws.get_all_records()
-    if row_id > len(registros):
-        raise HTTPException(status_code=404, detail="Registro não encontrado")
-    return registros[row_id - 1]
-
-@app.post("/validar-cpf")
-async def validar_cpf_endpoint(cpf_data: dict):
-    valido = validar_cpf(cpf_data.get("cpf", ""))
-    return {"cpf": cpf_data.get("cpf", ""), "valido": valido}
-
-# ==================== EXECUÇÃO LOCAL ====================
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+[2025-04-02 05:51:52 +0000] [1] [INFO] Starting gunicorn 21.2.0
+[2025-04-02 05:51:52 +0000] [1] [INFO] Listening at: http://0.0.0.0:7860 (1)
+[2025-04-02 05:51:52 +0000] [1] [INFO] Using worker: sync
+[2025-04-02 05:51:52 +0000] [7] [INFO] Booting worker with pid: 7
+[2025-04-02 05:51:54,740] ERROR in app: Exception on / [GET]
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 2529, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+  File "/app/app.py", line 66, in index
+    return render_template("pagina1.html", campos=campos, opcoes=opcoes)
+  File "/usr/local/lib/python3.10/site-packages/flask/templating.py", line 146, in render_template
+    template = app.jinja_env.get_or_select_template(template_name_or_list)
+  File "/usr/local/lib/python3.10/site-packages/jinja2/environment.py", line 1087, in get_or_select_template
+    return self.get_template(template_name_or_list, parent, globals)
+  File "/usr/local/lib/python3.10/site-packages/jinja2/environment.py", line 1016, in get_template
+    return self._load_template(name, globals)
+  File "/usr/local/lib/python3.10/site-packages/jinja2/environment.py", line 975, in _load_template
+    template = self.loader.load(self, name, self.make_globals(globals))
+  File "/usr/local/lib/python3.10/site-packages/jinja2/loaders.py", line 126, in load
+    source, filename, uptodate = self.get_source(environment, name)
+  File "/usr/local/lib/python3.10/site-packages/flask/templating.py", line 62, in get_source
+    return self._get_source_fast(environment, template)
+  File "/usr/local/lib/python3.10/site-packages/flask/templating.py", line 98, in _get_source_fast
+    raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: pagina1.html
+[2025-04-02 09:14:48,636] ERROR in app: Exception on / [GET]
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 2529, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+  File "/app/app.py", line 66, in index
+    return render_template("pagina1.html", campos=campos, opcoes=opcoes)
+  File "/usr/local/lib/python3.10/site-packages/flask/templating.py", line 146, in render_template
+    template = app.jinja_env.get_or_select_template(template_name_or_list)
+  File "/usr/local/lib/python3.10/site-packages/jinja2/environment.py", line 1087, in get_or_select_template
+    return self.get_template(template_name_or_list, parent, globals)
+  File "/usr/local/lib/python3.10/site-packages/jinja2/environment.py", line 1016, in get_template
+    return self._load_template(name, globals)
+  File "/usr/local/lib/python3.10/site-packages/jinja2/environment.py", line 975, in _load_template
+    template = self.loader.load(self, name, self.make_globals(globals))
+  File "/usr/local/lib/python3.10/site-packages/jinja2/loaders.py", line 126, in load
+    source, filename, uptodate = self.get_source(environment, name)
+  File "/usr/local/lib/python3.10/site-packages/flask/templating.py", line 62, in get_source
+    return self._get_source_fast(environment, template)
+  File "/usr/local/lib/python3.10/site-packages/flask/templating.py", line 98, in _get_source_fast
+    raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: pagina1.html
+[2025-04-02 09:14:49,735] ERROR in app: Exception on / [GET]
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 2529, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/usr/local/lib/python3.10/site-packages/flask/app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+  File "/app/app.py", line 66, in index
+    return render_template("pagina1.html", campos=campos, opcoes=opcoes)
+  File "/usr/local/lib/python3.10/site-packages/flask/templating.py", line 146, in render_template
+    template = app.jinja_env.get_or_select_template(template_name_or_list)
+  File "/usr/local/lib/python3.10/site-packages/jinja2/environment.py", line 1087, in get_or_select_template
+    return self.get_template(template_name_or_list, parent, globals)
+  File "/usr/local/lib/python3.10/site-packages/jinja2/environment.py", line 1016, in get_template
+    return self._load_template(name, globals)
+  File "/usr/local/lib/python3.10/site-packages/jinja2/environment.py", line 975, in _load_template
+    template = self.loader.load(self, name, self.make_globals(globals))
+  File "/usr/local/lib/python3.10/site-packages/jinja2/loaders.py", line 126, in load
+    source, filename, uptodate = self.get_source(environment, name)
+  File "/usr/local/lib/python3.10/site-packages/flask/templating.py", line 62, in get_source
+    return self._get_source_fast(environment, template)
+  File "/usr/local/lib/python3.10/site-packages/flask/templating.py", line 98, in _get_source_fast
+    raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: pagina1.html
