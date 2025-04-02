@@ -1,0 +1,3 @@
+gcloud secrets add-iam-policy-binding client_secret_investidura \
+--member=serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com \
+--role=roles/secretmanager.secretAccessor
